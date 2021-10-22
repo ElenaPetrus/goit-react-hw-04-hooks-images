@@ -1,115 +1,98 @@
-import React, { Component } from 'react';
-import { ToastContainer } from 'react-toastify';
+import { useState, useEffect } from 'react';
+import { toast, ToastContainer } from 'react-toastify';
 
-import { Searchbar } from './components/Searchbar/Searchbar';
+import Searchbar from './components/Searchbar/Searchbar';
 import { ImageGallery } from './components/ImageGallery/ImageGallery';
 import { Loader } from './components/Loader/Loader';
 import { Button } from './components/Button/Button';
-import { Modal } from './components/Modal/Modal';
+import Modal from './components/Modal/Modal';
 import { ErrorMessage } from './components/ErrorMessage/ErrorMessage';
 import { getPictures } from './services/apiService';
 
 import 'react-toastify/dist/ReactToastify.css';
 
-class App extends Component {
-  state = {
-    query: '',
-    setOfImages: [],
-    page: 1,
-    bigImg: null,
-    showModal: false,
-    status: 'idle',
-    error: null,
-  };
+export default function App() {
+  const [query, setQuery] = useState('');
+  const [setOfImages, setSetOfImages] = useState([]);
+  const [page, setPage] = useState(1);
+  const [bigImg, setBigImg] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [status, setStatus] = useState('idle');
+  const [error, setError] = useState(null);
 
-  componentDidUpdate(prevProps, prevState) {
-    if (this.state.page > 1) {
+  useEffect(() => {
+    if (page > 1) {
       window.scrollTo({
         top: document.documentElement.scrollHeight,
         behavior: 'smooth',
       });
     }
-  }
+  });
 
-  handleSearchbarSubmit = query => {
-    this.setState({ query, status: 'pending', page: 1 });
+  const handleSearchbarSubmit = query => {
+    setQuery(query);
+    setStatus('pending');
+    setPage(1);
     getPictures(query, 1)
-      .then(arr => this.setState({ setOfImages: arr }))
-      .catch(error => this.setState({ error, status: 'rejected' }))
-      .finally(() => this.setState({ loading: false }));
+      .then(arr => {
+        if (arr.length < 1) {
+          return toast.error('Nothing was found.');
+        }
+        setSetOfImages(arr);
+      })
+      .catch(error => {
+        setError(error);
+        setStatus('rejected');
+      });
+    // .finally(() => Loading(false));
   };
 
-  resetState = () => {
-    this.setState({
-      setOfImages: [],
-      page: 1,
-      error: null,
+  const resetState = () => {
+    setSetOfImages([]);
+    setPage(1);
+    setError(null);
+  };
+
+  const onLoadMore = () => {
+    getPictures(query, page + 1).then(img => {
+      setSetOfImages(prevState => [...prevState, ...img]);
+      setPage(page + 1);
+      setStatus('resolved');
     });
   };
 
-  onLoadMore = () => {
-    const { query, page } = this.state;
-    getPictures(query, page + 1).then(img =>
-      this.setState(prevState => ({
-        setOfImages: [...prevState.setOfImages, ...img],
-        page: prevState.page + 1,
-        status: 'resolved',
-      })),
-    );
+  const openModal = largeImageURL => {
+    setShowModal(true);
+    setBigImg(largeImageURL);
   };
 
-  openModal = largeImageURL => {
-    this.setState({
-      showModal: true,
-      bigImg: largeImageURL,
-    });
+  const closeModal = () => {
+    setShowModal(false);
   };
 
-  closeModal = () => this.setState({ showModal: false });
+  return (
+    <div>
+      <Searchbar
+        query={query}
+        onSubmit={handleSearchbarSubmit}
+        resetState={resetState}
+      />
 
-  // toggleModal = largeImageURL => {
-  //   this.setState(({ showModal }) => ({
-  //     showModal: !showModal,
-  //   }));
-  //   this.setState({ bigImg: largeImageURL });
-  // };
+      <ImageGallery images={setOfImages} page={page} onOpen={openModal} />
 
-  render() {
-    return (
-      <div>
-        <Searchbar
-          query={this.state.query}
-          onSubmit={this.handleSearchbarSubmit}
-          resetState={this.resetState}
+      {status === 'pending' && <Loader />}
+
+      {setOfImages.length > 0 && <Button onLoadMore={onLoadMore} />}
+      {showModal && (
+        <Modal
+          onClose={closeModal}
+          // onClose={this.toggleModal}
+          src={bigImg}
+          alt={query}
         />
-
-        <ImageGallery
-          images={this.state.setOfImages}
-          page={this.state.page}
-          onOpen={this.openModal}
-          // onOpen={this.toggleModal}
-        />
-
-        {this.state.status === 'pending' && <Loader />}
-
-        {this.state.setOfImages.length > 0 && (
-          <Button onLoadMore={this.onLoadMore} />
-        )}
-        {this.state.showModal && (
-          <Modal
-            onClose={this.closeModal}
-            // onClose={this.toggleModal}
-            src={this.state.bigImg}
-            alt={this.state.query}
-          />
-        )}
-        <ToastContainer autoClose={2000} />
-        {this.state.status === 'rejected' && (
-          <ErrorMessage message={this.state.error} />
-        )}
-      </div>
-    );
-  }
+      )}
+      <ToastContainer autoClose={2000} />
+      {status === 'rejected' && <ErrorMessage message={error} />}
+    </div>
+  );
 }
-
-export default App;
